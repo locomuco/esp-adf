@@ -38,6 +38,14 @@ static const char *TAG = "SDCARD_MP3_CONTROL_EXAMPLE";
 audio_pipeline_handle_t pipeline;
 audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_handle;
 playlist_operator_handle_t sdcard_list_handle = NULL;
+playlist_operator_handle_t sdcard_list_handle1 = NULL;
+
+#define GPIO_OUTPUT_IO_12    GPIO_NUM_14
+#define GPIO_OUTPUT_IO_13    GPIO_NUM_16
+#define GPIO_OUTPUT_IO_14    GPIO_NUM_13
+#define GPIO_OUTPUT_IO_15    GPIO_NUM_23
+
+#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_12) | (1ULL<<GPIO_OUTPUT_IO_13) | (1ULL<<GPIO_OUTPUT_IO_14) | (1ULL<<GPIO_OUTPUT_IO_15))
 
 static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_service_event_t *evt, void *ctx)
 {
@@ -53,30 +61,43 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
         switch ((int)evt->data) {
             case INPUT_KEY_USER_ID_PLAY:
                 ESP_LOGI(TAG, "[ * ] [Play] input key event");
-                audio_element_state_t el_state = audio_element_get_state(i2s_stream_writer);
-                switch (el_state) {
-                    case AEL_STATE_INIT :
-                        ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
-                        audio_pipeline_run(pipeline);
-                        break;
-                    case AEL_STATE_RUNNING :
-                        ESP_LOGI(TAG, "[ * ] Pausing audio pipeline");
-                        audio_pipeline_pause(pipeline);
-                        break;
-                    case AEL_STATE_PAUSED :
-                        ESP_LOGI(TAG, "[ * ] Resuming audio pipeline");
-                        audio_pipeline_resume(pipeline);
-                        break;
-                    default :
-                        ESP_LOGI(TAG, "[ * ] Not supported state %d", el_state);
-                }
+
+                audio_pipeline_run(pipeline);
+                    ESP_LOGI(TAG, "oma key event");
+                    ESP_LOGI(TAG, "[ * ] Stopped, advancing to the next OMA story");
+                    char *url = NULL;
+                    audio_pipeline_terminate(pipeline);
+                    sdcard_list_next(sdcard_list_handle, 1, &url);
+                    ESP_LOGW(TAG, "URL: %s", url);
+                    audio_element_set_uri(fatfs_stream_reader, url);
+                    audio_pipeline_reset_ringbuffer(pipeline);
+                    audio_pipeline_reset_elements(pipeline);
+                    audio_pipeline_run(pipeline);
+                    break;
+                //audio_element_state_t el_state = audio_element_get_state(i2s_stream_writer);
+                // switch (el_state) {
+                //     case AEL_STATE_INIT :
+                //         ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
+                //         audio_pipeline_run(pipeline);
+                //         break;
+                //     case AEL_STATE_RUNNING :
+                //         ESP_LOGI(TAG, "[ * ] Pausing audio pipeline");
+                //         audio_pipeline_pause(pipeline);
+                //         break;
+                //     case AEL_STATE_PAUSED :
+                //         ESP_LOGI(TAG, "[ * ] Resuming audio pipeline");
+                //         audio_pipeline_resume(pipeline);
+                //         break;
+                //     default :
+                //         ESP_LOGI(TAG, "[ * ] Not supported state %d", el_state);
+                // }
                 break;
             case INPUT_KEY_USER_ID_SET:
                 ESP_LOGI(TAG, "[ * ] [Set] input key event");
-                ESP_LOGI(TAG, "[ * ] Stopped, advancing to the next song");
-                char *url = NULL;
+                ESP_LOGI(TAG, "[ * ] Stopped, advancing to the next OPA story");
+                *url = NULL;
                 audio_pipeline_terminate(pipeline);
-                sdcard_list_next(sdcard_list_handle, 1, &url);
+                sdcard_list_next(sdcard_list_handle1, 1, &url);
                 ESP_LOGW(TAG, "URL: %s", url);
                 audio_element_set_uri(fatfs_stream_reader, url);
                 audio_pipeline_reset_ringbuffer(pipeline);
@@ -84,13 +105,16 @@ static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_ser
                 audio_pipeline_run(pipeline);
                 break;
             case INPUT_KEY_USER_ID_VOLUP:
-                ESP_LOGI(TAG, "[ * ] [Vol+] input key event");
-                player_volume += 10;
-                if (player_volume > 100) {
-                    player_volume = 100;
-                }
-                audio_hal_set_volume(board_handle->audio_hal, player_volume);
-                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+                ESP_LOGI(TAG, "[ * ] [Set] input key event");
+                ESP_LOGI(TAG, "[ * ] Stopped, advancing to the next OPA story");
+                *url = NULL;
+                audio_pipeline_terminate(pipeline);
+                sdcard_list_next(sdcard_list_handle1, 1, &url);
+                ESP_LOGW(TAG, "URL: %s", url);
+                audio_element_set_uri(fatfs_stream_reader, url);
+                audio_pipeline_reset_ringbuffer(pipeline);
+                audio_pipeline_reset_elements(pipeline);
+                audio_pipeline_run(pipeline);
                 break;
             case INPUT_KEY_USER_ID_VOLDOWN:
                 ESP_LOGI(TAG, "[ * ] [Vol-] input key event");
@@ -116,6 +140,36 @@ void sdcard_url_save_cb(void *user_data, char *url)
     }
 }
 
+void sdcard_url_save_cb1(void *user_data, char *url)
+{
+    playlist_operator_handle_t sdcard_handle = (playlist_operator_handle_t)user_data;
+    esp_err_t ret = sdcard_list_save(sdcard_handle, url);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Fail to save sdcard url to sdcard playlist");
+    }
+}
+
+void initialize_pins(void)
+{
+    gpio_config_t io_conf;
+    //disable interrupt
+    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_DEF_OUTPUT;
+    //bit mask of the pins that you want to set,e.g.GPIO18/19
+    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
+    //disable pull-down mode
+    io_conf.pull_down_en = 0;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    gpio_set_level(GPIO_OUTPUT_IO_12, 1);
+    gpio_set_level(GPIO_OUTPUT_IO_13, 1);
+    gpio_set_level(GPIO_OUTPUT_IO_14, 1);
+    gpio_set_level(GPIO_OUTPUT_IO_15, 1);
+}
 void app_main(void)
 {
     esp_log_level_set("*", ESP_LOG_WARN);
@@ -131,8 +185,11 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[1.2] Set up a sdcard playlist and scan sdcard music save to it");
     sdcard_list_create(&sdcard_list_handle);
-    sdcard_scan(sdcard_url_save_cb, "/sdcard", 0, (const char *[]) {"mp3"}, 1, sdcard_list_handle);
+    sdcard_scan(sdcard_url_save_cb, "/sdcard/oma", 0, (const char *[]) {"mp3"}, 1, sdcard_list_handle);
     sdcard_list_show(sdcard_list_handle);
+    sdcard_list_create(&sdcard_list_handle1);
+    sdcard_scan(sdcard_url_save_cb, "/sdcard/opa", 0, (const char *[]) {"mp3"}, 1, sdcard_list_handle1);
+    sdcard_list_show(sdcard_list_handle1);
 
     ESP_LOGI(TAG, "[ 2 ] Start codec chip");
     audio_board_handle_t board_handle = audio_board_init();
@@ -194,6 +251,7 @@ void app_main(void)
     ESP_LOGW(TAG, "[ 6 ] Press the keys to control music player:");
     ESP_LOGW(TAG, "      [Play] to start, pause and resume, [Set] next song.");
     ESP_LOGW(TAG, "      [Vol-] or [Vol+] to adjust volume.");
+    audio_hal_set_volume(board_handle->audio_hal, 60);
 
     while (1) {
         /* Handle event interface messages from pipeline
