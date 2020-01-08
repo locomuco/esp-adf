@@ -40,12 +40,11 @@ audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_
 playlist_operator_handle_t sdcard_list_handle = NULL;
 playlist_operator_handle_t sdcard_list_handle1 = NULL;
 
-#define GPIO_OUTPUT_IO_12    GPIO_NUM_14
-#define GPIO_OUTPUT_IO_13    GPIO_NUM_16
-#define GPIO_OUTPUT_IO_14    GPIO_NUM_13
-#define GPIO_OUTPUT_IO_15    GPIO_NUM_23
 
-#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUTPUT_IO_12) | (1ULL<<GPIO_OUTPUT_IO_13) | (1ULL<<GPIO_OUTPUT_IO_14) | (1ULL<<GPIO_OUTPUT_IO_15))
+#define GPIO_LED1    GPIO_NUM_22
+#define GPIO_LED2    GPIO_NUM_27
+
+#define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_LED1) | (1ULL<<GPIO_LED2))
 
 static esp_err_t input_key_service_cb(periph_service_handle_t handle, periph_service_event_t *evt, void *ctx)
 {
@@ -165,10 +164,8 @@ void initialize_pins(void)
     //configure GPIO with the given settings
     gpio_config(&io_conf);
 
-    gpio_set_level(GPIO_OUTPUT_IO_12, 1);
-    gpio_set_level(GPIO_OUTPUT_IO_13, 1);
-    gpio_set_level(GPIO_OUTPUT_IO_14, 1);
-    gpio_set_level(GPIO_OUTPUT_IO_15, 1);
+    gpio_set_level(GPIO_LED1, 1);
+    gpio_set_level(GPIO_LED2, 1);
 }
 void app_main(void)
 {
@@ -251,8 +248,8 @@ void app_main(void)
     ESP_LOGW(TAG, "[ 6 ] Press the keys to control music player:");
     ESP_LOGW(TAG, "      [Play] to start, pause and resume, [Set] next song.");
     ESP_LOGW(TAG, "      [Vol-] or [Vol+] to adjust volume.");
-    audio_hal_set_volume(board_handle->audio_hal, 60);
-
+    audio_hal_set_volume(board_handle->audio_hal, 55);
+    initialize_pins();
     while (1) {
         /* Handle event interface messages from pipeline
            to set music info and to advance to the next song
